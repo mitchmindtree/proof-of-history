@@ -1,5 +1,5 @@
 {
-  description = "A very basic flake";
+  description = "A toy implementation of Proof of History (PoH)";
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 

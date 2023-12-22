@@ -38,7 +38,7 @@ pub fn ticks<D: Digest>() -> impl Iterator<Item = Output<D>> {
 /// This function checks if each tick correctly follows from its predecessor in the sequence.
 ///
 /// Verification is approximately `number-of-cores` times faster than producing new ticks, due to
-/// parallel computation. It is essential that verification of existing tick sequences is
+/// parallel computation. It is important that verification of existing tick sequences is
 /// significantly faster than producing new ticks in order to allow new verifiers to catch up to
 /// the tick producer. In practise, verification of large sequences should be performed on the GPU.
 ///
