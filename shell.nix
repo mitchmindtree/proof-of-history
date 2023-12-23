@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> { } }:
 
 pkgs.mkShell {
   buildInputs = [
@@ -9,6 +9,6 @@ pkgs.mkShell {
     pkgs.libiconv
   ];
   env = pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
-    LD_LIBRARY_PATH="${pkgs.libiconv}/lib:$LD_LIBRARY_PATH";
+    LD_LIBRARY_PATH = "${pkgs.libiconv}/lib:$LD_LIBRARY_PATH";
   };
 }
