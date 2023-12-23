@@ -1,4 +1,4 @@
-# Toy Proof of History (PoH) Implementation
+# Proof of History
 
 A naive, minimalist, demo implementation of the
 [Proof of History (PoH) concept](https://solana.com/solana-whitepaper.pdf).
