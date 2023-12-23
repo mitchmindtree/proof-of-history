@@ -1,0 +1,38 @@
+name: poh-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  nix-fmt-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: DeterminateSystems/nix-installer-action@main
+    - run: nix fmt -- --check ./
+
+  cargo-fmt-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: DeterminateSystems/nix-installer-action@main
+    - run: nix develop --command cargo fmt --verbose --all -- --check
+
+  cargo-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: DeterminateSystems/nix-installer-action@main
+    - uses: Swatinem/rust-cache@v2
+    - run: nix develop --command cargo check --locked --all
+
+  cargo-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: DeterminateSystems/nix-installer-action@main
+    - uses: Swatinem/rust-cache@v2
+    - run: nix develop --command cargo test --locked --all-features --all
