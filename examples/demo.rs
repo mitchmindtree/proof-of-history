@@ -7,17 +7,18 @@
 
 type Hasher = sha3::Keccak256;
 type Hash = digest::Output<Hasher>;
+type Block = Vec<Hash>;
+
+// Number of ticks in a block.
+const BLOCK: usize = 1_000_000;
 
 fn main() {
-    // Number of ticks in a block.
-    const BLOCK: usize = 1_000_000;
-
-    let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<Hash>>(1);
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Block>(1);
     let start = std::time::Instant::now();
 
     // Run the verifier on a separate thread.
     let verifier = std::thread::spawn(move || {
-        let mut history: Vec<digest::Output<Hasher>> = vec![];
+        let mut history: Vec<Hash> = vec![];
         for block in rx {
             // Verify the start of the block is valid given the last tick.
             if let (Some(last), Some(first)) = (history.last(), block.first()) {
@@ -36,7 +37,7 @@ fn main() {
         history
     });
 
-    // Produce some ticks.
+    // Produce 10 blocks of ticks.
     let mut history = vec![];
     for (i, tick) in proof_of_history::ticks::<Hasher>()
         .enumerate()
