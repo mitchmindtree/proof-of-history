@@ -1,13 +1,48 @@
 //! A demo implementation of Proof of History, generic over the hashing implementation.
 
+#[doc(inline)]
+pub use digest;
 use digest::{Digest, Output};
+
+/// A simple wrapper around the `tick` function that stores the output of the
+/// previous tick and automatically supplies it to the `tick` function on each call
+/// to `next` or `next_with_data`.
+#[derive(Clone, Debug)]
+pub struct Ticks<D: Digest> {
+    seed: Output<D>,
+}
+
+impl<D: Digest> Ticks<D> {
+    /// Calls [`tick`] providing the stored `seed` (the hash of the previous
+    /// tick, or the initial seed) and default data.
+    pub fn next(&mut self) -> Output<D> {
+        let data = Output::<D>::default();
+        self.next_with_data(&data)
+    }
+
+    /// Calls [`tick`] providing the stored `seed` (the hash of the previous
+    /// tick, or the initial seed) and the given `data`.
+    pub fn next_with_data(&mut self, data: &Output<D>) -> Output<D> {
+        self.seed = tick::<D>(&self.seed, data);
+        self.seed.clone()
+    }
+}
 
 /// Computes a cryptographic hash of the given data using the specified digest algorithm.
 /// This pure function represents a tick operation in the proof of history.
 ///
-/// Returns an `Output<D>` that contains the resulting hash of the data.
-pub fn tick<D: Digest>(data: &[u8]) -> Output<D> {
+/// Returns an `Output<D>` that contains the resulting hash of the `data` and `extra` combined.
+///
+/// # Arguments
+/// * `seed` - Either the seed hash, or the output of the previous tick.
+/// * `data` - The hash of any extra input data that is to be associated with the tick.
+///   If no extra data is required, `Output::<D>::default()` should be used.
+///
+/// Both arguments are fixed size in order to ensure a best-effort consistent
+/// timing for the digest, and in turn the tick rate.
+pub fn tick<D: Digest>(seed: &Output<D>, data: &Output<D>) -> Output<D> {
     let mut digest = D::new();
+    digest.update(seed);
     digest.update(data);
     digest.finalize()
 }
@@ -19,19 +54,22 @@ pub fn tick<D: Digest>(data: &[u8]) -> Output<D> {
 /// Returns an implementation of `Iterator` that yields `Output<D>` items, each representing a
 /// hashed tick.
 ///
+/// # Arguments
+/// * `seed` - If no ticks have been emitted, this is the seed hash. Otherwise, this is
+///   the output of the previous tick.
+///
 /// # Examples
 /// ```
-/// for tick_hash in proof_of_history::ticks::<sha2::Sha256>().take(10) {
-///     // Do something with `tick_hash`
+/// type Hasher = sha2::Sha256;
+/// let seed = <_>::default();
+/// let mut ticks = proof_of_history::ticks::<Hasher>(seed);
+/// for i in 0..10 {
+///     let tick = ticks.next();
+///     println!("Tick {}: {:x}", i, tick);
 /// }
 /// ```
-pub fn ticks<D: Digest>() -> impl Iterator<Item = Output<D>> {
-    let mut data = Output::<D>::default();
-    std::iter::from_fn(move || {
-        let output = tick::<D>(&data);
-        data.copy_from_slice(&output);
-        Some(output.clone())
-    })
+pub fn ticks<D: Digest>(seed: Output<D>) -> Ticks<D> {
+    Ticks { seed }
 }
 
 /// Verifies the validity of a given sequence of ticks using parallel processing.
@@ -44,6 +82,7 @@ pub fn ticks<D: Digest>() -> impl Iterator<Item = Output<D>> {
 ///
 /// # Arguments
 /// * `ticks` - A slice of `Output<D>` representing the sequence of ticks to be verified.
+/// * `data` - A function that maps a tick's index and output hash to its input data.
 ///
 /// # Returns
 /// A `Result` which is `Ok(())` if the sequence is valid, or `Err(usize)` indicating the index of
@@ -52,15 +91,26 @@ pub fn ticks<D: Digest>() -> impl Iterator<Item = Output<D>> {
 /// # Examples
 /// ```
 /// type Hasher = sha2::Sha256;
-/// let ticks: Vec<_> = proof_of_history::ticks::<Hasher>().take(2usize.pow(16)).collect();
-/// proof_of_history::verify::<Hasher>(&ticks).unwrap();
+/// let seed = <_>::default();
+/// let mut ticks = proof_of_history::ticks::<Hasher>(seed);
+/// let ticks: Vec<_> = std::iter::from_fn(|| Some(ticks.next())).take(2usize.pow(16)).collect();
+/// proof_of_history::verify::<Hasher, _>(&ticks, |_, _| <_>::default()).unwrap();
 /// ```
-pub fn verify<D: Digest>(ticks: &[Output<D>]) -> Result<(), usize> {
+pub fn verify<D, F>(ticks: &[Output<D>], data: F) -> Result<(), usize>
+where
+    D: Digest,
+    F: Sync + Fn(usize, &Output<D>) -> Output<D>,
+{
     use rayon::prelude::*;
     let ix = ticks
         .par_windows(2)
         .enumerate()
-        .filter(|(_, window)| tick::<D>(&window[0]) != window[1])
+        .filter(|&(ix, window)| {
+            let seed = &window[0];
+            let hash = &window[1];
+            let data = data(ix, hash);
+            tick::<D>(seed, &data) != *hash
+        })
         .map(|(ix, _)| ix)
         .reduce(|| ticks.len(), |a, b| a.min(b));
     if ix < ticks.len() {
@@ -77,10 +127,13 @@ mod test {
     fn test_verify() {
         type Hasher = sha2::Sha256;
         let timer = std::time::Instant::now();
-        let ticks: Vec<_> = ticks::<Hasher>().take(2usize.pow(16)).collect();
+        let default_data = <_>::default();
+        let mut ticks = ticks::<Hasher>(default_data);
+        let iter = std::iter::from_fn(|| Some(ticks.next()));
+        let ticks: Vec<_> = iter.take(2usize.pow(16)).collect();
         dbg!(timer.elapsed());
         let timer = std::time::Instant::now();
-        verify::<Hasher>(&ticks).unwrap();
+        verify::<Hasher, _>(&ticks, |_i, _h| default_data).unwrap();
         dbg!(timer.elapsed());
     }
 }
