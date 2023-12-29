@@ -2,6 +2,9 @@
 name = "proof-of-history"
 version = "0.1.0"
 edition = "2021"
+description = "A naive, minimalist, demo implementation of Proof of History."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mitchmindtree/proof-of-history"
 
 [dependencies]
 digest = "0.10"
